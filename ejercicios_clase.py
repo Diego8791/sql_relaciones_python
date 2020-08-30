@@ -71,7 +71,29 @@ def fill():
     # Cada tutor tiene los campos:
     # id --> este campo es auto incremental por lo que no deberá completarlo
     # name --> El nombre del tutor (puede ser solo nombre sin apellido)
+    
+    conn = sqlite3.connect('secundaria.db')
+    c = conn.cursor()
 
+    # ingresar al menos dos tutores
+    cont = 0
+    while True:
+        name = [input('Ingrese el nombre del tutor: ')]
+        try:    
+            c.execute("""
+                    INSERT INTO tutor (name)
+                    VALUES (?);""", name)    
+        except sqlite3.Error as err:
+            print(err)
+        cont += 1
+        if cont >= 2:
+            otro = input('¿Desea introducir otro tutor? (s/n): ')
+            if otro != 's':
+                break
+
+    conn.commit()
+    conn.close()
+    
     # Llenar la tabla de la secundaria con al menos 5 estudiantes
     # Cada estudiante tiene los posibles campos:
     # id --> este campo es auto incremental por lo que no deberá completarlo
@@ -90,6 +112,49 @@ def fill():
     # primero insertado el tutor.
     # No olvidar activar las foreign_keys!
 
+    conn = sqlite3.connect('secundaria.db')
+    conn.execute("PRAGMA foreign_keys = 1")
+    c = conn.cursor()
+
+    # Cargar los datos de los estudiantes
+    estudiantes = []
+    while True:
+        datos = []
+        try:
+            for x in range(4):
+                if x == 0:
+                    name = input('Ingrese el nombre del estudiante: ')
+                    datos.append(name)
+                elif x == 1:
+                    age = int(input('Ingrese la edad: '))
+                    datos.append(age)
+                elif x == 2:
+                    grade = int(input('Ingrese el grado: '))
+                    datos.append(grade)
+                else: 
+                    tutor = input('Ingrese el nombre del tutor: ')
+                    datos.append(tutor)
+            estudiantes.append(datos)
+        except:
+            print('Dato incorrecto, no se puede cargar')
+
+        otro = input('Desea incluir otro estudiante? (s/n): ')
+        if otro != 's':
+            break
+    
+    # Incluir datos en tabla estudiante
+    try:
+        c.executemany("""
+        INSERT INTO estudiante (name, age, grade, fk_tutor_id)
+        SELECT ?,?,?,t.id
+        FROM tutor as t
+        WHERE t.name =?;""", estudiantes)
+    except sqlite3.Error as err:
+        print(err)
+
+    conn.commit()
+    conn.close()
+
 
 def fetch():
     print('Comprovemos su contenido, ¿qué hay en la tabla?')
@@ -103,6 +168,23 @@ def fetch():
     # columnas que deben aparecer en el print:
     # id / name / age / grade / tutor_nombre
 
+    conn = sqlite3.connect('secundaria.db')
+    c = conn.cursor()
+
+    c.execute("""
+            SELECT e.id, e.name, e.age, e.grade, t.name 
+            FROM estudiante AS e 
+            INNER JOIN tutor AS t ON e.fk_tutor_id = t.id;
+            """)
+    
+    while True:
+        row = c.fetchone()
+        if row is None:
+            break
+        print(row)
+
+    conn.close()
+
 
 def search_by_tutor(tutor):
     print('Operación búsqueda!')
@@ -113,6 +195,26 @@ def search_by_tutor(tutor):
     # De la lista de esos estudiantes el SELECT solo debe traer
     # las siguientes columnas por fila encontrada:
     # id / name / age / tutor_nombre
+    
+    conn = sqlite3.connect('secundaria.db')
+    c = conn.cursor()
+
+    tutor = [tutor]
+    try:
+        c.execute("""SELECT e.id, e.name, e.age, t.name
+                FROM estudiante AS e
+                INNER JOIN tutor AS t ON e.fk_tutor_id = t.id
+                WHERE t.name=?;""", tutor)
+    except sqlite3.Error as err:
+        print(err)
+
+    while True:
+        row = c.fetchone()
+        if row is None:
+            break
+        print(row)
+
+    conn.close()
 
 
 def modify(id, name):
@@ -122,6 +224,21 @@ def modify(id, name):
     # modificar el tutor asignado (fk_tutor_id --> id) por aquel que coincida
     # con el nombre del tutor pasado como parámetro
 
+    conn = sqlite3.connect('secundaria.db')
+    c = conn.cursor()
+    
+    try:
+        rowcount = c.execute("""
+                    UPDATE estudiante AS e
+                    SET fk_tutor_id = (SELECT t.id FROM tutor AS t WHERE t.name=?)
+                    WHERE e.id =?;""", (name, id)).rowcount
+    except sqlite3.Error as err:
+        print(err)
+
+    print('Filas actualizadas:', rowcount)
+
+    conn.commit()
+    conn.close()
 
 def count_grade(grade):
     print('Estudiante por grado')
@@ -129,19 +246,33 @@ def count_grade(grade):
     # se encuentran cursando el grado "grade" pasado como parámetro
     # Imprimir en pantalla el resultado
 
+    conn = sqlite3.connect('secundaria.db')
+    c = conn.cursor()
+
+    c.execute("""SELECT COUNT(e.id) AS estudiante_count
+                 FROM estudiante as e, tutor as t
+                 WHERE e.fk_tutor_id = t.id
+                 AND e.grade =?;""", (grade,))
+
+    result = c.fetchone()
+    count = result[0]
+    print('Personas de', grade, 'encontradas:', count)
+
+    conn.close()
 
 if __name__ == '__main__':
     print("Bienvenidos a otra clase de Inove con Python")
-    create_schema()   # create and reset database (DB)
-    # fill()
-    # fetch()
+    # create_schema()   # create and reset database (DB)
+    # fill()                # ingresar datos en las tablas
+    fetch()                 # ver que contenido hay en la tabla
 
-    tutor = 'nombre_tutor'
-    # search_by_tutor(tutor)
+    tutor = 'julio'
+    # search_by_tutor(tutor)   # consultar los alumnos que tienen como tutor a un tutor 
 
-    nuevo_tutor = 'nombre_tutor'
+    name = 'julio'
     id = 2
-    # modify(id, nuevo_tutor)
+    # modify(id, name)         # modificar el tutor asignado a un alumno
 
-    grade = 2
-    # count_grade(grade)
+    grade = 5
+    # count_grade(grade)        # contar los alumnos en grado especifico
+    
